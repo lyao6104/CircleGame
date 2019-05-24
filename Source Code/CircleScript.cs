@@ -14,8 +14,9 @@ public class CircleScript : MonoBehaviour
 	private Rigidbody2D rb;
 	private Transform myTransform;
 	private CircleCollider2D myCollider;
-	private Camera myCamera;
+	private Camera myCamera, deathCam;
 	private float cameraToCircleRatio;
+	private AIScript myAI;
 
 	// Start is called before the first frame update
 	private void Start()
@@ -27,22 +28,31 @@ public class CircleScript : MonoBehaviour
 		{
 			myCamera = GameObject.FindGameObjectWithTag("MainCamera").GetComponent<Camera>();
 			cameraToCircleRatio = myTransform.localScale.magnitude / myCamera.orthographicSize;
+			deathCam = GameObject.FindGameObjectWithTag("DeathCamera").GetComponent<Camera>();
+			deathCam.gameObject.SetActive(false);
 			//Debug.Log(cameraToCircleRatio);
 		}
 		if (!isPlayer) // Players are always green (maybe I'll make a colour picker at some point);
 		{
 			GetComponent<SpriteRenderer>().color = Random.ColorHSV();
+			myAI = GetComponent<AIScript>();
 		}
-		
+	}
+
+	private void OnDestroy()
+	{
+		myCamera.gameObject.SetActive(false);
+		deathCam.gameObject.SetActive(true);
 	}
 
 	private void OnCollisionEnter2D(Collision2D collision)
 	{
 		Transform otherTransform = collision.gameObject.GetComponent<Transform>();
 		//Debug.Log(collision.collider.gameObject.name);
-		// This will increase the size of the circle based on the mass added from the one being consumed. 
+		// If this circle is large enough to consume the other
 		if (collision.gameObject.tag == "Circle" && myTransform.localScale.magnitude - otherTransform.localScale.magnitude >= absorptionThreshold)
 		{
+			// Increase the size of the circle based on the mass added from the one being consumed. 
 			Debug.Log("Another circle was absorbed.");
 			float targetMass = rb.mass + collision.gameObject.GetComponent<Rigidbody2D>().mass;
 			// This should calculate how much bigger this circle needs to be in order to reach targetMass.
@@ -52,9 +62,19 @@ public class CircleScript : MonoBehaviour
 			myTransform.localScale = myTransform.localScale * scale;
 			Destroy(collision.gameObject);
 			StartCoroutine(OnConsume(targetMass, 0.05f)); // Log mass after 50ms
-			myCamera.orthographicSize = myTransform.localScale.magnitude / cameraToCircleRatio;
+
+			if (isPlayer)
+			{
+				myCamera.orthographicSize = myTransform.localScale.magnitude / cameraToCircleRatio; // Zoom out the camera
+			}
+			if (!isPlayer)
+			{
+				// This tells the AI script to find a new target since the old one was just destroyed.
+				// For some reason calling GetTarget() directly here doesn't work properly. 
+				myAI.targetDead = true;
+			}
 		}
-		else if (myTransform.localScale.magnitude - otherTransform.localScale.magnitude < absorptionThreshold)
+		else if (collision.gameObject.tag == "Circle" && myTransform.localScale.magnitude - otherTransform.localScale.magnitude < absorptionThreshold)
 		{
 			Debug.Log("This circle isn't big enough to absorb the other one.");
 			if (debugLogging)
@@ -77,9 +97,22 @@ public class CircleScript : MonoBehaviour
 
 	private void FixedUpdate()
 	{
+		if (!isPlayer && Time.time < myAI.startDelay) // Give it time to actually find a target.
+		{
+			return;
+		}
+
 		if (isPlayer) // Allow only the circle controlled by the player to move based on input. Everything else should run off of an AI.
 		{
 			rb.velocity += new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical")) * speed;
+		}
+		else if (!myAI.targetReached)
+		{
+			rb.velocity += myAI.GetDirection() * speed;
+		}
+		else if (myAI.targetReached)
+		{
+			myAI.GetTarget();
 		}
 	}
 }

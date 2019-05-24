@@ -36,6 +36,11 @@ public class PropSpawner : MonoBehaviour
 	{
 		if (!isInitial)
 		{
+			// This looks kind of sketchy, but it is meant to make the spawner look less saturated as the ticks run out.
+			float H, S, V; 
+			Color.RGBToHSV(GetComponent<SpriteRenderer>().color, out H, out S, out V);
+			GetComponent<SpriteRenderer>().color = Color.HSVToRGB(H, 255f / tickAmount / 255f * ticksRemaining, V);
+			// Delay changes after each tick.
 			float delayDifference = spawnDelay - spawnDelayEnd;
 			spawnDelay -= delayDifference / ticksRemaining;
 			Debug.Log("spawnDelay changed by " + -(delayDifference / ticksRemaining) + ". It is now " + spawnDelay + ".");
