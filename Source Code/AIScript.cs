@@ -1,16 +1,21 @@
-﻿using System.Collections;
+﻿/* Name: Larry Y.
+ * Date: May 18, 2019
+ * Desc: Script for AI, contains functions called by other scripts as well. */
+
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class AIScript : MonoBehaviour
 {
 	public GameObject curTarget;
-	public float searchFrequency, lastSearchTime, targetDistanceThreshold, startDelay;
-	public bool debugLogging, targetReached, targetDead;
+	public float searchFrequency, lastSearchTime, targetDistanceThreshold, startDelay, fleeDuration;
+	public bool debugLogging, targetReached, targetDead, isFleeing;
 
 	private Transform targetTransform;
-	private Vector3 targetPos;
+	private Vector3 targetPos, fleePos;
 	private CircleScript myCircScript;
+	private float fledAt;
 
     // Start is called before the first frame update
     void Start()
@@ -56,6 +61,39 @@ public class AIScript : MonoBehaviour
 		return (targetPos - transform.position).normalized;
 	}
 
+	// Get the angle that points towards the current target
+	public float GetTargetAngle()
+	{
+		// Rotate to face target
+		Vector3 targetPosRelative = targetPos;
+		targetPosRelative.x -= transform.position.x;
+		targetPosRelative.y -= transform.position.y;
+		return -Mathf.Atan2(targetPosRelative.x, targetPosRelative.y) * Mathf.Rad2Deg;
+	}
+
+	// Flee to goHere
+	public void Flee(Vector3 goHere)
+	{
+		isFleeing = true;
+		fleePos = goHere;
+		targetPos = goHere;
+		fledAt = Time.time;
+		if (debugLogging)
+		{
+			Debug.Log(name + " is fleeing");
+		}
+	}
+
+	// Called by AISensorScript, will tell AI to stop fleeing if it is "safe" and fleeDuration has elaspsed
+	public void StopFleeing()
+	{
+		if (Time.time - fledAt > fleeDuration)
+		{
+			isFleeing = false;
+			GetTarget();
+		}
+	}
+
     void FixedUpdate()
     {
 		if (Time.time < startDelay) // Give it time to actually find a target.
@@ -63,7 +101,7 @@ public class AIScript : MonoBehaviour
 			return;
 		}
 
-        if (Time.time - lastSearchTime > searchFrequency || targetDead)
+        if ((Time.time - lastSearchTime > searchFrequency || targetDead) && !isFleeing)
 		{
 			GetTarget();
 		}
@@ -74,6 +112,11 @@ public class AIScript : MonoBehaviour
 		else if (targetReached)
 		{
 			targetReached = false;
+		}
+
+		if (isFleeing)
+		{
+			targetPos = fleePos;
 		}
     }
 }

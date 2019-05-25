@@ -9,7 +9,8 @@ using UnityEngine;
 public class CircleScript : MonoBehaviour
 {
 	public bool isPlayer, debugLogging;
-	public float speed, absorptionThreshold;
+	public float speed, absorptionThreshold, myMagnitude;
+	// myMagnitude exists because calling transform.localScale.magnitude in other scripts always returns what the magnitude was at the start for some reason.
 
 	private Rigidbody2D rb;
 	private Transform myTransform;
@@ -24,6 +25,7 @@ public class CircleScript : MonoBehaviour
 		rb = GetComponent<Rigidbody2D>();
 		myTransform = GetComponent<Transform>();
 		myCollider = GetComponent<CircleCollider2D>();
+		myMagnitude = myTransform.localScale.magnitude;
 		if (isPlayer)
 		{
 			myCamera = GameObject.FindGameObjectWithTag("MainCamera").GetComponent<Camera>();
@@ -41,8 +43,11 @@ public class CircleScript : MonoBehaviour
 
 	private void OnDestroy()
 	{
-		myCamera.gameObject.SetActive(false);
-		deathCam.gameObject.SetActive(true);
+		if (isPlayer)
+		{
+			myCamera.gameObject.SetActive(false);
+			deathCam.gameObject.SetActive(true);
+		}
 	}
 
 	private void OnCollisionEnter2D(Collision2D collision)
@@ -60,6 +65,7 @@ public class CircleScript : MonoBehaviour
 			// (myCollider.radius * myTransform.localScale.x) should get the true radius, rather than it always being 1.925 or whatever it is set to at the beginning.
 			float scale = newRadius / (myCollider.radius * myTransform.localScale.x);
 			myTransform.localScale = myTransform.localScale * scale;
+			myMagnitude = transform.localScale.magnitude;
 			Destroy(collision.gameObject);
 			StartCoroutine(OnConsume(targetMass, 0.05f)); // Log mass after 50ms
 
@@ -109,6 +115,7 @@ public class CircleScript : MonoBehaviour
 		else if (!myAI.targetReached)
 		{
 			rb.velocity += myAI.GetDirection() * speed;
+			rb.rotation = myAI.GetTargetAngle();
 		}
 		else if (myAI.targetReached)
 		{
