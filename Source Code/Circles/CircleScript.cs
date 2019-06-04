@@ -57,6 +57,11 @@ public class CircleScript : MonoBehaviour
 		// If this circle is large enough to consume the other
 		if (collision.gameObject.tag == "Circle" && myTransform.localScale.magnitude - otherTransform.localScale.magnitude >= absorptionThreshold)
 		{
+			if (collision.gameObject.GetComponent<CircleScript>() != null)
+			{
+				GameObject.FindGameObjectWithTag("GameController").GetComponent<GameController>().OnConsume(collision.gameObject);
+			}
+
 			// Increase the size of the circle based on the mass added from the one being consumed. 
 			Debug.Log("Another circle was absorbed.");
 			float targetMass = rb.mass + collision.gameObject.GetComponent<Rigidbody2D>().mass;
@@ -88,6 +93,13 @@ public class CircleScript : MonoBehaviour
 				Debug.Log(myTransform.localScale.magnitude - otherTransform.localScale.magnitude);
 			}
 		}
+	}
+
+	private void OnCollisionStay2D(Collision2D collision)
+	{
+		// If two circles of similar size touch each other and one of them becomes big enough to consume the other afterwards,
+		// then this should cause them to be consumed properly.
+		OnCollisionEnter2D(collision);
 	}
 
 	// Not included in the OnCollisionEnter because it wasn't logging an accurate actualMass.

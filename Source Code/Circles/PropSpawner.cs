@@ -1,4 +1,8 @@
-﻿using System.Collections;
+﻿/* Name: Larry Y.
+ * Date: May 3, 2019
+ * Desc: Spawns prop circles for the player and AIs to consume. */
+ 
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
