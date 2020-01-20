@@ -11,6 +11,26 @@ using UnityEngine.SceneManagement;
 public class MainMenuScript : MonoBehaviour
 {
 	public string[] mapList;
+	public Canvas mapPickerCanvas;
+
+	public void LoadMap(string mapName)
+	{
+		SceneManager.LoadScene(mapName);
+	}
+
+	public void ToggleMapPicker()
+	{
+		if (mapPickerCanvas.enabled)
+		{
+			mapPickerCanvas.enabled = false;
+			GetComponent<Canvas>().enabled = true;
+		}
+		else
+		{
+			mapPickerCanvas.enabled = true;
+			GetComponent<Canvas>().enabled = false;
+		}
+	}
 
 	public void StartGame()
 	{

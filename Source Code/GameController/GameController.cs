@@ -45,6 +45,7 @@ public class GameController : MonoBehaviour
 				else
 				{
 					GameObject.Instantiate(playerPrefab, spawn.transform.position, spawn.transform.rotation);
+					playerHasBeenSpawned = true;
 				}
 			}
 			else if (script.canSpawnAI) // ...some can only spawn AIs...

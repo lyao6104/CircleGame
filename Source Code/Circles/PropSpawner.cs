@@ -15,6 +15,7 @@ public class PropSpawner : MonoBehaviour
 	public int tickAmount; // How many ticks pass before the spawner disables itself.
 	public float initialMultiplier; // The first spawn will have its amount multiplied by this number.
 	public float spawnRange;
+	public bool useAlphaNotHSV;
 
 	private float spawnDelay; // Time, in seconds, between each spawn
 	private int ticksRemaining;
@@ -41,9 +42,18 @@ public class PropSpawner : MonoBehaviour
 		if (!isInitial)
 		{
 			// This looks kind of sketchy, but it is meant to make the spawner look less saturated as the ticks run out.
-			float H, S, V; 
-			Color.RGBToHSV(GetComponent<SpriteRenderer>().color, out H, out S, out V);
-			GetComponent<SpriteRenderer>().color = Color.HSVToRGB(H, 255f / tickAmount / 255f * ticksRemaining, V);
+			if (useAlphaNotHSV)
+			{
+				Color temp = GetComponent<SpriteRenderer>().color;
+				temp.a = 255f / tickAmount / 255f * ticksRemaining;
+				GetComponent<SpriteRenderer>().color = temp;
+			}
+			else
+			{
+				float H, S, V;
+				Color.RGBToHSV(GetComponent<SpriteRenderer>().color, out H, out S, out V);
+				GetComponent<SpriteRenderer>().color = Color.HSVToRGB(H, 255f / tickAmount / 255f * ticksRemaining, V);
+			}
 			// Delay changes after each tick.
 			float delayDifference = spawnDelay - spawnDelayEnd;
 			spawnDelay -= delayDifference / ticksRemaining;
