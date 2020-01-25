@@ -14,6 +14,7 @@ public class CircleScript : MonoBehaviour
 	public bool isPlayer, debugLogging;
 	public float minZoom, maxZoom, absoluteMaxZoom; // maxZoom can increase, up to absoluteMaxZoom
 	public float speed, rotateSpeed, absorptionThreshold, myMagnitude;
+	public float aiCollisionDistance; // Used for raycasting and collision detection
 	// myMagnitude exists because calling transform.localScale.magnitude in other scripts always returns what the magnitude was at the start for some reason.
 
 	private Rigidbody2D rb;
@@ -22,6 +23,8 @@ public class CircleScript : MonoBehaviour
 	private Camera myCamera, deathCam;
 	private float cameraToCircleRatio, zoomRatio;
 	private AIScript myAI;
+	private float colRadius; // Radius, in actual units, of this circle's collider.
+	//private float aiAvoidStart = 0; // The time at which an AI started to avoid an object in its way
 
 	// Start is called before the first frame update
 	private void Start()
@@ -30,6 +33,7 @@ public class CircleScript : MonoBehaviour
 		myTransform = GetComponent<Transform>();
 		myCollider = GetComponent<CircleCollider2D>();
 		myMagnitude = myTransform.localScale.magnitude;
+		colRadius = myCollider.radius;
 		if (isPlayer)
 		{
 			myCamera = GameObject.FindGameObjectWithTag("MainCamera").GetComponent<Camera>();
@@ -50,8 +54,10 @@ public class CircleScript : MonoBehaviour
 	{
 		if (isPlayer)
 		{
-			myCamera.gameObject.SetActive(false);
-			deathCam.gameObject.SetActive(true);
+			if (myCamera != null)
+				myCamera.gameObject.SetActive(false);
+			if (deathCam != null)
+				deathCam.gameObject.SetActive(true);
 		}
 	}
 
@@ -71,9 +77,9 @@ public class CircleScript : MonoBehaviour
 			Debug.Log("Another circle was absorbed.");
 			float targetMass = rb.mass + collision.gameObject.GetComponent<Rigidbody2D>().mass;
 			// This should calculate how much bigger this circle needs to be in order to reach targetMass.
-			float newRadius = Mathf.Sqrt(targetMass / Mathf.PI);
+			colRadius = Mathf.Sqrt(targetMass / Mathf.PI);
 			// (myCollider.radius * myTransform.localScale.x) should get the true radius, rather than it always being 1.925 or whatever it is set to at the beginning.
-			float scale = newRadius / (myCollider.radius * myTransform.localScale.x);
+			float scale = colRadius / (myCollider.radius * myTransform.localScale.x);
 			myTransform.localScale = myTransform.localScale * scale;
 			myMagnitude = transform.localScale.magnitude;
 			Destroy(collision.gameObject);
@@ -157,27 +163,89 @@ public class CircleScript : MonoBehaviour
 				//}
 				if (Input.GetAxis("Horizontal") != 0f) // Only rotate if player is pressing the keys
 				{
-					rb.AddTorque(-Mathf.Sign(Input.GetAxis("Horizontal")) * rotateSpeed * Mathf.Pow(rb.mass, 1.1f));
+					rb.AddTorque(-Mathf.Sign(Input.GetAxis("Horizontal")) * rotateSpeed * Mathf.Pow(rb.mass, 1.5f));
 				}
 			}
 		}
 		else if (!myAI.targetReached)
 		{
+			RaycastHit2D hit = Physics2D.Raycast(transform.position, myAI.GetDirection());
+			RaycastHit2D leftRay = new RaycastHit2D(); // Assignment is necessary because otherwise it's an "unassigned local variable" and we can't have that now can we 😒
+			RaycastHit2D rightRay = new RaycastHit2D(); 
+			bool rayHit = false;
+			float avoidCollisionDistance = aiCollisionDistance + colRadius;
+			if (hit.distance <= avoidCollisionDistance)
+			{
+				// If the object hit by the raycast is a circle, then this AI might be able to consume it, in which case a collision shouldn't be avoided.
+				Transform otherTransform = hit.collider.transform;
+				if (hit.collider.tag == "Circle" && myTransform.localScale.magnitude - otherTransform.localScale.magnitude >= absorptionThreshold)
+				{
+					// Do nothing
+				}
+				else
+				{
+					rayHit = true;
+					leftRay = Physics2D.Raycast(transform.position, Vector2.Perpendicular(rb.velocity.normalized));
+					rightRay = Physics2D.Raycast(transform.position, -Vector2.Perpendicular(rb.velocity.normalized));
+					if (debugLogging)
+					{
+						Debug.Log("Avoiding " + hit.collider.name);
+					}
+					Debug.DrawLine(transform.position, hit.point, Color.red, Time.fixedDeltaTime, false);
+					Debug.DrawLine(transform.position, leftRay.point, Color.blue, Time.fixedDeltaTime, false);
+					Debug.DrawLine(transform.position, rightRay.point, Color.blue, Time.fixedDeltaTime, false);
+				}
+			}
+			if (!rayHit)
+			{
+				Debug.DrawLine(transform.position, transform.position + (Vector3)rb.velocity.normalized * avoidCollisionDistance, Color.blue, Time.fixedDeltaTime, false);
+			}
+
 			if (movementType == MovementType.Basic)
 			{
 				rb.velocity += myAI.GetDirection() * speed;
-				rb.rotation = myAI.GetTargetAngle();
+				if (!rayHit) // Go towards the target if there's nothing in front that needs to be avoided
+				{
+					rb.rotation = myAI.GetRotationToTarget();
+				}
+				else if (leftRay.distance >= avoidCollisionDistance) // Turn left if that way is clear
+				{
+					myAI.GoHere(Vector2.Perpendicular(rb.velocity.normalized) * 10);
+				}
+				else if (rightRay.distance >= avoidCollisionDistance) // Otherwise go right if that's clear
+				{
+					myAI.GoHere(-Vector2.Perpendicular(rb.velocity.normalized) * 10);
+				}
+				else // Otherwise go backwards
+				{
+					myAI.GoHere(rb.velocity.normalized * -10); 
+				}
 			}
 			else if (movementType == MovementType.Rocket)
 			{
 				rb.AddRelativeForce(Vector2.up * speed * Mathf.Pow(rb.mass, 1.1f));
-				if (rb.rotation > myAI.GetTargetAngle())
+				if (rayHit)
 				{
-					rb.AddTorque(-rotateSpeed * Mathf.Pow(rb.mass, 1.1f));
+					if (leftRay.distance >= avoidCollisionDistance) // Turn left if that way is clear
+					{
+						myAI.GoHere(Vector2.Perpendicular(rb.velocity.normalized) * 10);
+					}
+					else if (rightRay.distance >= avoidCollisionDistance) // Otherwise go right if that's clear
+					{
+						myAI.GoHere(-Vector2.Perpendicular(rb.velocity.normalized) * 10);
+					}
+					else // Otherwise go backwards
+					{
+						myAI.GoHere(rb.velocity.normalized * -10);
+					}
 				}
-				else if (rb.rotation < myAI.GetTargetAngle())
+				if (myAI.GetAngleBetweenTarget() < 0)
 				{
-					rb.AddTorque(rotateSpeed * Mathf.Pow(rb.mass, 1.1f));
+					rb.AddTorque(-rotateSpeed * Mathf.Pow(rb.mass, 1.5f));
+				}
+				else if (myAI.GetAngleBetweenTarget() > 0)
+				{
+					rb.AddTorque(rotateSpeed * Mathf.Pow(rb.mass, 1.5f));
 				}
 			}
 		}

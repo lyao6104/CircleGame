@@ -10,7 +10,7 @@ public class AIScript : MonoBehaviour
 {
 	public GameObject curTarget;
 	public float searchFrequency, lastSearchTime, targetDistanceThreshold, startDelay, fleeDuration;
-	public bool debugLogging, targetReached, targetDead, isFleeing;
+	public bool debugLogging, targetReached, targetDead, isFleeing, goingSomewhere;
 
 	protected Transform targetTransform;
 	protected Vector3 targetPos, fleePos;
@@ -47,7 +47,18 @@ public class AIScript : MonoBehaviour
 		if (!foundATarget)
 		{
 			// Find a spawner and stay near it, preferring closer ones.
-			// TODO
+			GameObject[] spawners = GameObject.FindGameObjectsWithTag("Spawner");
+			foreach (GameObject spawner in spawners)
+			{
+				if ((spawner.GetComponent<Transform>().position - transform.position).magnitude <= closestValidDistance)
+				{
+					closestValidDistance = (spawner.GetComponent<Transform>().position - transform.position).magnitude;
+					curTarget = spawner;
+					targetTransform = spawner.transform;
+					targetPos = targetTransform.position;
+					foundATarget = true;
+				}
+			}
 		}
 		if (debugLogging && foundATarget)
 		{
@@ -61,14 +72,22 @@ public class AIScript : MonoBehaviour
 		return (targetPos - transform.position).normalized;
 	}
 
-	// Get the angle that points towards the current target
-	public float GetTargetAngle()
+	// Get the angle that points towards the current target (values should be from 0 to 360)
+	// Note: This works differently from Vector2.Angle() and should not be used in the same way
+	public float GetRotationToTarget()
 	{
 		// Rotate to face target
 		Vector3 targetPosRelative = targetPos;
 		targetPosRelative.x -= transform.position.x;
 		targetPosRelative.y -= transform.position.y;
 		return -Mathf.Atan2(targetPosRelative.x, targetPosRelative.y) * Mathf.Rad2Deg;
+	}
+
+	// Get the signed angle between this circle and its target.
+	// This gets its own function so that it's easier for it to be used in other scripts.
+	public float GetAngleBetweenTarget()
+	{
+		return Vector2.SignedAngle(GetComponent<Rigidbody2D>().velocity.normalized, GetDirection());
 	}
 
 	// Flee to goHere
@@ -84,12 +103,26 @@ public class AIScript : MonoBehaviour
 		}
 	}
 
+	// A less prioritized version of flee
+	public virtual void GoHere(Vector3 goHere)
+	{
+		goingSomewhere = true;
+		fleePos = goHere;
+		targetPos = goHere;
+		fledAt = Time.time;
+		if (debugLogging)
+		{
+			Debug.Log(name + " is going to " + goHere);
+		}
+	}
+
 	// Called by AISensorScript, will tell AI to stop fleeing if it is "safe" and fleeDuration has elaspsed
 	public virtual void StopFleeing()
 	{
 		if (Time.time - fledAt > fleeDuration)
 		{
 			isFleeing = false;
+			goingSomewhere = false;
 			GetTarget();
 		}
 	}
@@ -103,6 +136,7 @@ public class AIScript : MonoBehaviour
         if ((Time.time - lastSearchTime > searchFrequency || targetDead) && !isFleeing)
 		{
 			GetTarget();
+			goingSomewhere = false;
 		}
 		if ((targetPos - transform.position).magnitude < targetDistanceThreshold)
 		{
@@ -118,7 +152,7 @@ public class AIScript : MonoBehaviour
 			Debug.DrawRay(targetPos, -GetDirection().normalized * targetDistanceThreshold, Color.red, Time.fixedDeltaTime, false);
 		}
 
-		if (isFleeing)
+		if (isFleeing || goingSomewhere)
 		{
 			targetPos = fleePos;
 			StopFleeing();
